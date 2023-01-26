@@ -15,15 +15,24 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.example.weather.models.WeatherResponse
+import com.example.weather.services.WeatherService
+import com.example.weather.utilities.Utils
 import com.google.android.gms.location.*
 import com.karumi.dexter.Dexter
 import com.karumi.dexter.MultiplePermissionsReport
 import com.karumi.dexter.PermissionToken
 import com.karumi.dexter.listener.PermissionRequest
 import com.karumi.dexter.listener.multi.MultiplePermissionsListener
+import retrofit2.Call
+import retrofit2.Callback
+import retrofit2.Response
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 
-class MainActivity : AppCompatActivity(), MultiplePermissionsListener, LocationListener {
+class MainActivity : AppCompatActivity(), MultiplePermissionsListener, LocationListener,
+    Callback<WeatherResponse> {
     private lateinit var locationClient: FusedLocationProviderClient
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,7 +77,7 @@ class MainActivity : AppCompatActivity(), MultiplePermissionsListener, LocationL
 
     @SuppressLint("MissingPermission")
     fun requestLocationData() {
-        var request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000).build()
+        var request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000).build()
         locationClient.requestLocationUpdates(request, this, Looper.myLooper())
     }
 
@@ -92,5 +101,31 @@ class MainActivity : AppCompatActivity(), MultiplePermissionsListener, LocationL
 
     override fun onLocationChanged(location: Location) {
         Log.i("LOCATION", "onLocationChanged: latitude = ${location.latitude}, longitude = ${location.longitude}")
+        getWeatherDetails(location.latitude, location.longitude)
+    }
+
+    fun getWeatherDetails(latitude: Double, longitude: Double): Unit {
+        if (Utils.isNetworkAvailable(this)) {
+            val retrofit = Retrofit.Builder()
+                .baseUrl("https://api.openweathermap.org/data/2.5/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+            val service = retrofit.create<WeatherService>(WeatherService::class.java)
+            val call = service.getWeather(latitude, longitude, "metric", BuildConfig.APP_ID)
+            call.enqueue(this)
+        }
+    }
+
+    override fun onResponse(call: Call<WeatherResponse>, response: Response<WeatherResponse>) {
+        if (response.isSuccessful) {
+            val resp = response.body()
+            Log.i("WEATHER_SERVICE", "onResponse: $resp")
+        } else {
+            Log.i("WEATHER_SERVICE", "onResponse(failed): ${response.code()}")
+        }
+    }
+
+    override fun onFailure(call: Call<WeatherResponse>, t: Throwable) {
+        Log.i("WEATHER_SERVICE", "onFailure: ${t.message.toString()}")
     }
 }
